@@ -1,4 +1,4 @@
-name: diffdock
+name: confidence-bootstrapping
 channels:
   - conda-forge
   - defaults

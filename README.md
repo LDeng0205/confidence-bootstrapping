@@ -4,7 +4,7 @@ Here we provide our implementation of the Confidence Bootstrapping method, pretr
 
 ## Dataset
 
-The Binding MOAD database can be downloaded from [http://www.bindingmoad.org/]. All 189 complexes in the DockGen test set can be found in `data/BindingMOAD_2020_ab_processed_biounit/test_names.npy`, and the 85 complexes from 8 clusters we tested Confidence Bootstrapping on can be found in `data/BindingMOAD_2020_ab_processed_biounit/test_names_bootstrapping.npy`. The list of complexes in the DockGen benchmark can be found at `data/BindingMOAD_2020_ab_processed_biounit/new_cluster_to_ligands.pkl`, which is a dictionary with cluster names as keys and lists of ligand names as values. Complexes from Binding MOAD should be downloaded also to `data/BindingMOAD_2020_ab_processed_biounit`. Here, we also provide the ligands and receptors used in the test set at `data/BindingMOAD_2020_ab_processed_biounit/MOAD_ligands` and `data/MOAD_new_test_processed` respectively.
+The Binding MOAD database can be downloaded from [http://www.bindingmoad.org/]. All 189 complexes in the DockGen test set can be found in `data/BindingMOAD_2020_ab_processed_biounit/test_names.npy`, and the 85 complexes from DockGen-clusters can be found in `data/BindingMOAD_2020_ab_processed_biounit/test_names_bootstrapping.npy`. The list of complexes in the DockGen benchmark can also be found at `data/BindingMOAD_2020_ab_processed_biounit/new_cluster_to_ligands.pkl`, which is a dictionary with cluster names as keys and lists of ligand names as values. Complexes from Binding MOAD should be downloaded also to `data/BindingMOAD_2020_ab_processed_biounit`. Here, we also provide the processed receptors at `data/MOAD_new_test_processed` and `data/MOAD_new_val_processed`.
 
 ## Setup
 
@@ -14,7 +14,7 @@ We will set up the environment with anaconda [Anaconda](https://docs.anaconda.co
 
 Activate the environment
 
-    conda activate diffdock
+    conda activate confidence-bootstrapping
 
 ## ESM Embeddings
 
