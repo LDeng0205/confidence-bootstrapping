@@ -109,7 +109,7 @@ def construct_datasets(args, t_to_sigma):
                                include_miscellaneous_atoms=False if not hasattr(args, 'include_miscellaneous_atoms') else args.include_miscellaneous_atoms)
 
     target_dataset = MOAD(cache_path=args.cache_path, split=args.split, single_cluster_name=args.cb_cluster, 
-                          keep_original=True, multiplicity=args.val_multiplicity, max_receptor_size=args.max_receptor_size,
+                          keep_original=True, multiplicity=args.target_multiplicity, max_receptor_size=args.max_receptor_size,
                           remove_promiscuous_targets=args.remove_promiscuous_targets, min_ligand_size=args.min_ligand_size,
                           esm_embeddings_sequences_path=args.moad_esm_embeddings_sequences_path,
                           unroll_clusters=args.unroll_clusters, root=args.moad_dir, transform=transform,
@@ -117,7 +117,7 @@ def construct_datasets(args, t_to_sigma):
 
     if args.keep_original_train:
         train_dataset = MOAD(cache_path=args.cache_path, split='train', transform=transform,
-                              keep_original=True, multiplicity=args.val_multiplicity,
+                              keep_original=True, multiplicity=args.train_multiplicity,
                               max_receptor_size=args.max_receptor_size,
                               remove_promiscuous_targets=args.remove_promiscuous_targets,
                               min_ligand_size=args.min_ligand_size,
@@ -329,21 +329,11 @@ def inference_epoch(model, filtering_model, complex_graphs, filtering_complex_di
 
 
 def inference_finetune(args, model, filtering_model, filtering_args, filtering_complex_dict, confidence_cutoff, 
-                       optimizer, scheduler, ema_weights, finetune_dataset, target_loader, t_to_sigma, run_dir):
+                       optimizer, ema_weights, finetune_dataset, target_loader, t_to_sigma, run_dir):
     
     loss_fn = partial(loss_function, tr_weight=args.tr_weight, rot_weight=args.rot_weight,
                           tor_weight=args.tor_weight, no_torsion=args.no_torsion, backbone_weight=args.backbone_loss_weight,
                           sidechain_weight=args.sidechain_loss_weight)
-    best_val_loss = math.inf
-    best_val_inference_value = math.inf if args.inference_earlystop_goal == 'min' else 0
-    best_epoch = 0
-    best_val_inference_epoch = 0
-    
-    freeze_params = 0
-    scheduler_mode = args.inference_earlystop_goal if args.val_inference_freq is not None else 'min'
-    if args.scheduler == 'layer_linear_warmup':
-        freeze_params = args.warmup_dur * (args.num_conv_layers + 2) - 1
-        print("Freezing some parameters until epoch {}".format(freeze_params))
     
     finetune_loader = None
     if args.save_metrics:
@@ -355,17 +345,13 @@ def inference_finetune(args, model, filtering_model, filtering_args, filtering_c
     for epoch in range(args.n_epochs):
         if epoch % 5 == 0: print("Run name: ", args.run_name)
         logs = {}
-        
-        
-        if epoch > freeze_params:
-            ema_weights.store(model.parameters())
-            if args.use_ema: ema_weights.copy_to(model.parameters()) # load ema parameters into model for running validation and inference
+         
+        ema_weights.store(model.parameters())
 
-        val_losses = test_epoch(model, target_loader, device, t_to_sigma, loss_fn, args.test_sigma_intervals, torsional=False)
-        print("Epoch {}: Validation loss {:.4f}  tr {:.4f}   rot {:.4f}   tor {:.4f}   sc {:.4f}"
-              .format(epoch, val_losses['loss'], val_losses['tr_loss'], val_losses['rot_loss'], val_losses['tor_loss'], val_losses['sidechain_loss']))
+        # load ema parameters into model for running inference
+        if args.use_ema: ema_weights.copy_to(model.parameters()) 
 
-        if epoch % args.val_inference_freq == 0:
+        if epoch % args.cb_inference_freq == 0:
             print("Doing inference and saving complexes to finetuning dataset.")
             inf_dataset = [target_loader.dataset.get(i) for i in range(min(args.num_inference_complexes, target_loader.dataset.__len__()))]
 
@@ -392,48 +378,23 @@ def inference_finetune(args, model, filtering_model, filtering_args, filtering_c
             loader_class = DataListLoader if torch.cuda.is_available() else DataLoader
             finetune_loader = loader_class(dataset=finetune_dataset, batch_size=args.batch_size, num_workers=args.num_dataloader_workers, shuffle=True, pin_memory=args.pin_memory, drop_last=args.dataloader_drop_last)
 
-            print("Epoch {}: Val inference rmsds_lt2 {:.3f} rmsds_lt5 {:.3f} min_rmsds_lt2 {:.3f} min_rmsds_lt5 {:.3f}"
+            print("Epoch {}: Target inference rmsds_lt2 {:.3f} rmsds_lt5 {:.3f} min_rmsds_lt2 {:.3f} min_rmsds_lt5 {:.3f}"
                   .format(epoch, inf_metrics['rmsds_lt2'], inf_metrics['rmsds_lt5'], inf_metrics['min_rmsds_lt2'], inf_metrics['min_rmsds_lt5']))
-            logs.update({'valinf_' + k: v for k, v in inf_metrics.items()}, step=epoch + 1)
+            logs.update({'targetinf_' + k: v for k, v in inf_metrics.items()}, step=epoch + 1)
 
-
-        if epoch > freeze_params:
-            if not args.use_ema: ema_weights.copy_to(model.parameters())
-            ema_state_dict = copy.deepcopy(model.module.state_dict() if device.type == 'cuda' else model.state_dict())
-            ema_weights.restore(model.parameters())
+        if not args.use_ema: ema_weights.copy_to(model.parameters())
+        ema_state_dict = copy.deepcopy(model.module.state_dict() if device.type == 'cuda' else model.state_dict())
+        ema_weights.restore(model.parameters())
         
         state_dict = model.module.state_dict() if device.type == 'cuda' else model.state_dict()
-        if args.inference_earlystop_metric in logs.keys() and \
-                (args.inference_earlystop_goal == 'min' and logs[args.inference_earlystop_metric] <= best_val_inference_value or
-                 args.inference_earlystop_goal == 'max' and logs[args.inference_earlystop_metric] >= best_val_inference_value):
-            best_val_inference_value = logs[args.inference_earlystop_metric]
-            best_val_inference_epoch = epoch
-            torch.save(state_dict, os.path.join(run_dir, 'best_inference_epoch_model.pt'))
-            if epoch > freeze_params:
-                torch.save(ema_state_dict, os.path.join(run_dir, 'best_ema_inference_epoch_model.pt'))
-
-        if val_losses['loss'] <= best_val_loss:
-            best_val_loss = val_losses['loss']
-            best_epoch = epoch
-            torch.save(state_dict, os.path.join(run_dir, 'best_model.pt'))
-            if epoch > freeze_params:
-                torch.save(ema_state_dict, os.path.join(run_dir, 'best_ema_model.pt'))
 
         if not (args.save_model_freq is None) and (epoch + 1) % args.save_model_freq == 0:
             
             torch.save(state_dict, os.path.join(run_dir, f'epoch{epoch+1}_model.pt'))
-            if epoch > freeze_params:
-                torch.save(ema_state_dict, os.path.join(run_dir, f'epoch{epoch+1}_ema_inference_epoch_model.pt'))
+            torch.save(ema_state_dict, os.path.join(run_dir, f'epoch{epoch+1}_ema_inference_epoch_model.pt'))
             shutil.copyfile(os.path.join(run_dir, 'best_model.pt'),
                             os.path.join(run_dir, f'epoch{epoch+1}_best_model.pt'))
 
-        if scheduler:
-            if epoch < freeze_params or (args.scheduler == 'linear_warmup' and epoch < args.warmup_dur):
-                scheduler.step()
-            elif args.val_inference_freq is not None:
-                scheduler.step(best_val_inference_value)
-            else:
-                scheduler.step(val_losses['loss'])
 
         torch.save({
             'epoch': epoch,
@@ -442,35 +403,19 @@ def inference_finetune(args, model, filtering_model, filtering_args, filtering_c
             'ema_weights': ema_weights.state_dict(),
         }, os.path.join(run_dir, 'last_model.pt'))
 
-        if args.scheduler == 'layer_linear_warmup' and (epoch+1) % args.warmup_dur == 0:
-            step = (epoch+1) // args.warmup_dur
-            if step < args.num_conv_layers + 2:
-                print("New unfreezing step")
-                optimizer, scheduler = get_optimizer_and_scheduler(args, model, step=step, scheduler_mode=scheduler_mode)
-            elif step == args.num_conv_layers + 2:
-                print("Unfreezing all parameters")
-                optimizer, scheduler = get_optimizer_and_scheduler(args, model, step=step, scheduler_mode=scheduler_mode)
-                ema_weights = ExponentialMovingAverage(model.parameters(), decay=args.ema_rate)
-        elif args.scheduler == 'linear_warmup' and epoch == args.warmup_dur:
-            print("Moving to plateu scheduler")
-            optimizer, scheduler = get_optimizer_and_scheduler(args, model, step=1, scheduler_mode=scheduler_mode,
-                                                               optimizer=optimizer)
-
         train_losses = train_epoch(model, finetune_loader, optimizer, device, t_to_sigma, loss_fn, 
-                                   ema_weights if epoch > freeze_params else None, torsional=False)
+                                   ema_weights, torsional=False)
         print("Epoch {}: Training loss {:.4f}  tr {:.4f}   rot {:.4f}   tor {:.4f}   sc {:.4f}  lr {:.4f}"
               .format(epoch, train_losses['loss'], train_losses['tr_loss'], train_losses['rot_loss'],
                       train_losses['tor_loss'], train_losses['sidechain_loss'], optimizer.param_groups[0]['lr']))
 
         if args.wandb:
             logs.update({'train_' + k: v for k, v in train_losses.items()})
-            logs.update({'val_' + k: v for k, v in val_losses.items()})
             logs['current_lr'] = optimizer.param_groups[0]['lr']
             wandb.log(logs, step=epoch + 1)
 
         if args.save_metrics:
             logs.update({'train_' + k: v for k, v in train_losses.items()})
-            logs.update({'val_' + k: v for k, v in val_losses.items()})
             logs['current_lr'] = optimizer.param_groups[0]['lr']
             for k, v in logs.items():
                 if k in metrics:
@@ -478,8 +423,6 @@ def inference_finetune(args, model, filtering_model, filtering_args, filtering_c
                 else:
                     metrics[k] = [v]
 
-    print("Best Validation Loss {} on Epoch {}".format(best_val_loss, best_epoch))
-    print("Best inference metric {} on Epoch {}".format(best_val_inference_value, best_val_inference_epoch))
     if args.save_metrics:
         with open(os.path.join(run_dir, 'training_metrics.pkl'), 'wb') as file:
             pickle.dump(metrics, file)
@@ -498,13 +441,11 @@ def main_function():
             else:
                 arg_dict[key] = value
         args.config = args.config.name
-    assert (args.inference_earlystop_goal == 'max' or args.inference_earlystop_goal == 'min')
-
     torch.backends.cudnn.benchmark = args.cudnn_benchmark
 
     if args.wandb:
         wandb.init(
-            entity='coarse-graining-mit',
+            entity='entity',
             settings=wandb.Settings(start_method="fork"),
             project=args.project,
             name=args.run_name,
@@ -518,7 +459,7 @@ def main_function():
     
     # Load score model
     model = get_model(args, device, t_to_sigma=t_to_sigma)
-    optimizer, scheduler = get_optimizer_and_scheduler(args, model, scheduler_mode=args.inference_earlystop_goal if args.val_inference_freq is not None else 'min')
+    optimizer, _ = get_optimizer_and_scheduler(args, model, scheduler_mode='min')
     ema_weights = ExponentialMovingAverage(model.parameters(),decay=args.ema_rate)
 
     if args.restart_dir:
@@ -621,7 +562,7 @@ def main_function():
     args.device = device
 
     inference_finetune(args, model, filtering_model, filtering_model_args, filtering_complex_dict, args.confidence_cutoff,
-                       optimizer, scheduler, ema_weights, finetune_dataset, target_loader, t_to_sigma, run_dir)
+                       optimizer, ema_weights, finetune_dataset, target_loader, t_to_sigma, run_dir)
 
 if __name__ == '__main__':
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
