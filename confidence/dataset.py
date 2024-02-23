@@ -361,7 +361,6 @@ class FilteringDataset(Dataset):
                                             'rot': t * torch.ones(complex_graph['misc_atom'].num_nodes),
                                             'tor': t * torch.ones(complex_graph['misc_atom'].num_nodes)}
         complex_graph.complex_t = {'tr': t * torch.ones(1), 'rot': t * torch.ones(1), 'tor': t * torch.ones(1)}
-        #complex_graph.affinity = torch.tensor(self.affinities[complex_graph.name]).float()
 
         if self.atom_confidence_loss_weight>0:
             assert self.parallel == 1, "not implemented yet"

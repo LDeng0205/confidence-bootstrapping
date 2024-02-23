@@ -37,7 +37,7 @@ from datasets.pdbbind import PDBBind, read_mol, NoiseTransform
 from utils.diffusion_utils import t_to_sigma as t_to_sigma_compl, get_t_schedule, \
     get_inverse_schedule
 from utils.diffusion_utils import set_time
-from utils.sampling import randomize_position, sampling, compute_affinity
+from utils.sampling import randomize_position, sampling
 from utils.training import loss_function
 from utils.utils import get_model, remove_all_hs, read_strings_from_txt, ExponentialMovingAverage
 from utils.visualise import PDBFile
@@ -359,13 +359,9 @@ if __name__ == '__main__':
             filtering_args = None
             filtering_model_args = None
 
-        affinity_model = None
-        affinity_args = None
-        affinity_model_args = None
-
     if args.wandb:
         run = wandb.init(
-            entity='',
+            entity='entity',
             settings=wandb.Settings(start_method="fork"),
             project=args.project,
             name=args.run_name,
@@ -432,12 +428,7 @@ if __name__ == '__main__':
             print(
                 f"HAPPENING | The filtering dataset did not contain {orig_complex_graph.name[0]}. We are skipping this complex.")
             continue
-        if affinity_model is not None and not (affinity_args.use_original_model_cache or affinity_args.transfer_weights) and \
-                orig_complex_graph.name[0] not in affinity_complex_dict.keys():
-            skipped += 1
-            print(
-                f"HAPPENING | The affinity dataset did not contain {orig_complex_graph.name[0]}. We are skipping this complex.")
-            continue
+
         success = 0
         bs = args.batch_size
         while 0 >= success > -args.limit_failures:
@@ -506,20 +497,7 @@ if __name__ == '__main__':
                                                      svgd_tor_log_rel_weight=args.svgd_tor_log_rel_weight,
                                                      svgd_use_x0=args.svgd_use_x0)
 
-                    if affinity_model is not None:
-                        if not (affinity_args.use_original_model_cache or affinity_args.transfer_weights):
-                            affinity_data_list = [copy.deepcopy(affinity_complex_dict[orig_complex_graph.name[0]]) for _ in
-                                                  range(N)]
-                        else:
-                            affinity_data_list = None
-
-                        affinity_pred = compute_affinity(data_list=data_list, affinity_model=affinity_model,
-                                                         affinity_data_list=affinity_data_list,
-                                                         parallel=affinity_args.parallel,
-                                                         all_atoms=affinity_args.all_atoms, device=device, include_miscellaneous_atoms= hasattr(affinity_args, 'include_miscellaneous_atoms') and affinity_args.include_miscellaneous_atoms).cpu().item()
-                        true_affinities_list.append(affinities[orig_complex_graph.name[0]])
-                        pred_affinities_list.append(affinity_pred)
-
+                    
                     if args.xtb:
                         print(len(data_list), confidence[:, 0].shape)
                         conf = confidence[:, 0].cpu().numpy()
@@ -615,9 +593,6 @@ if __name__ == '__main__':
                     print(orig_complex_graph['name'], ' rmsd', np.around(rmsd, 1), ' centroid distance',
                           np.around(centroid_distance, 1))
                 centroid_distances_list.append(centroid_distance)
-
-                if affinity_model is not None:
-                    print("true affinity", true_affinities_list[-1], "predicted affinity", pred_affinities_list[-1])
 
                 self_distances = np.linalg.norm(ligand_pos[:, :, None, :] - ligand_pos[:, None, :, :], axis=-1)
                 self_distances = np.where(np.eye(self_distances.shape[2]), np.inf, self_distances)
@@ -985,20 +960,6 @@ if __name__ == '__main__':
                     f'{overlap}top10_reversefiltered_centroid_percentile_75': np.percentile(
                         top10_reverse_filtered_centroid_distances, 75).round(2),
                 })
-
-    if affinity_model is not None:
-        true_affinities, pred_affinities = np.asarray(true_affinities_list), np.asarray(pred_affinities_list)
-        affinity_rmse = np.sqrt(np.mean((true_affinities - pred_affinities) * (true_affinities - pred_affinities)))
-        affinity_spearman = scipy.stats.spearmanr(true_affinities, pred_affinities)
-        affinity_pearson = np.corrcoef(true_affinities, pred_affinities)
-        affinity_mae = np.mean(np.abs(true_affinities - pred_affinities))
-        performance_metrics['affinity_rmse'] = affinity_rmse
-        performance_metrics['affinity_spearman'] = affinity_spearman
-        performance_metrics['affinity_pearson'] = affinity_pearson
-        performance_metrics['affinity_mae'] = affinity_mae
-        print('affinity_rmse', affinity_rmse)
-    else:
-        print('affinity model is None')
 
     for k in performance_metrics:
         print(k, performance_metrics[k])
