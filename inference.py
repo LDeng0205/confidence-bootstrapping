@@ -113,8 +113,6 @@ if __name__ == '__main__':
     parser.add_argument('--ckpt', type=str, default='best_model.pt', help='Checkpoint to use inside the folder')
     parser.add_argument('--filtering_model_dir', type=str, default=None, help='Path to folder with trained confidence model and hyperparameters')
     parser.add_argument('--filtering_ckpt', type=str, default='best_model.pt', help='Checkpoint to use inside the folder')
-    parser.add_argument('--affinity_model_dir', type=str, default=None, help='Path to folder with trained affinity model and hyperparameters')
-    parser.add_argument('--affinity_ckpt', type=str, default='best_model.pt', help='Checkpoint to use inside the folder')
     parser.add_argument('--num_cpu', type=int, default=None, help='if this is a number instead of none, the max number of cpus used by torch will be set to this.')
     parser.add_argument('--run_name', type=str, default='test', help='')
     parser.add_argument('--project', type=str, default='ligbind_inf', help='')
@@ -123,7 +121,6 @@ if __name__ == '__main__':
 
     parser.add_argument('--old_score_model', action='store_true', default=False, help='')
     parser.add_argument('--old_filtering_model', action='store_true', default=False, help='')
-    parser.add_argument('--old_affinity_model', action='store_true', default=False, help='')
     parser.add_argument('--matching_popsize', type=int, default=40, help='Differential evolution popsize parameter in matching')
     parser.add_argument('--matching_maxiter', type=int, default=40, help='Differential evolution maxiter parameter in matching')
 
@@ -288,15 +285,6 @@ if __name__ == '__main__':
             filtering_args.esm_embeddings_path = None
         if not hasattr(filtering_args, 'num_classification_bins'):
             filtering_args.num_classification_bins = 2
-    if args.affinity_model_dir is not None:
-        with open(f'{args.affinity_model_dir}/model_parameters.yml') as f:
-            affinity_args = Namespace(**yaml.full_load(f))
-
-        # for affinity prediction
-        df = pd.read_csv('data/INDEX_general_PL_data.2020', sep="  |//|=", comment='#', header=None,
-                         names=['PDB code', 'resolution', 'release year', '-logKd/Ki', 'Kd/Ki', 'Kd/Ki value',
-                                'reference ligand name', 'refef', 'ef', 'ee', 'asd'])
-        affinities = df.set_index('PDB code').to_dict()['-logKd/Ki']
 
     if args.num_cpu is not None:
         torch.set_num_threads(args.num_cpu)
@@ -309,12 +297,6 @@ if __name__ == '__main__':
             print('HAPPENING | filtering model uses different type of graphs than the score model. Loading (or creating if not existing) the data for the filtering model now.')
             filtering_test_dataset = get_dataset(args, filtering_args, filtering=True)
             filtering_complex_dict = {d.name: d for d in filtering_test_dataset}
-    if args.affinity_model_dir is not None:
-        if not (affinity_args.use_original_model_cache or affinity_args.transfer_weights):
-            # if the affinity model uses the same type of data as the original model then we do not need this dataset and can just use the complexes
-            print('HAPPENING | affinity model uses different type of graphs than the score model. Loading (or creating if not existing) the data for the affinity model now.')
-            affinity_test_dataset = get_dataset(args, affinity_args)
-            affinity_complex_dict = {d.name: d for d in affinity_test_dataset}
 
     t_to_sigma = partial(t_to_sigma_compl, args=score_model_args)
 
@@ -376,27 +358,14 @@ if __name__ == '__main__':
             filtering_model = None
             filtering_args = None
             filtering_model_args = None
-        if args.affinity_model_dir is not None:
-            if affinity_args.transfer_weights:
-                with open(f'{affinity_args.original_model_dir}/model_parameters.yml') as f:
-                    affinity_model_args = Namespace(**yaml.full_load(f))
-            else:
-                affinity_model_args = affinity_args
 
-            affinity_model = get_model(affinity_model_args, device, t_to_sigma=t_to_sigma, no_parallel=True,
-                                       confidence_mode=True, old=args.old_affinity_model)
-            state_dict = torch.load(f'{args.affinity_model_dir}/{args.affinity_ckpt}', map_location=torch.device('cpu'))
-            affinity_model.load_state_dict(state_dict, strict=True)
-            affinity_model = affinity_model.to(device)
-            affinity_model.eval()
-        else:
-            affinity_model = None
-            affinity_args = None
-            affinity_model_args = None
+        affinity_model = None
+        affinity_args = None
+        affinity_model_args = None
 
     if args.wandb:
         run = wandb.init(
-            entity='coarse-graining-mit',
+            entity='',
             settings=wandb.Settings(start_method="fork"),
             project=args.project,
             name=args.run_name,

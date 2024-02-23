@@ -138,7 +138,7 @@ class FilteringDataset(Dataset):
             self.preprocessing(original_model_cache)
 
         self.complex_graphs_cache = original_model_cache if self.use_original_model_cache else get_cache_path(args, split)
-        print('Using the cached complex graphs of the original model args' if self.use_original_model_cache else 'Not using the cached complex graphs of the original model args. Instead the complex graphs are used that are at the location given by the dataset parameters given to filtering_train.py')
+        print('Using the cached complex graphs of the original model args' if self.use_original_model_cache else 'Not using the cached complex graphs of the original model args. Instead the complex graphs are used that are at the location given by the dataset parameters given to confidence_train.py')
         print(self.complex_graphs_cache)
         if self.dataset == 'pdbbind':
             dataset = PDBBind(transform=None, root=args.pdbbind_dir, limit_complexes=args.limit_complexes,
@@ -275,12 +275,6 @@ class FilteringDataset(Dataset):
             else:
                 neg += (len(r) - p)
         print("In total", pos, "positives and ", neg, "negatives")
-
-        # for affinity prediction
-        #df = pd.read_csv('data/INDEX_general_PL_data.2020', sep="  |//|=", comment='#', header=None,
-        #                 names=['PDB code', 'resolution', 'release year', '-logKd/Ki', 'Kd/Ki', 'Kd/Ki value',
-        #                        'reference ligand name', 'refef', 'ef', 'ee', 'asd'])
-        #self.affinities = df.set_index('PDB code').to_dict()['-logKd/Ki']
 
     def len(self):
         return len(self.dataset_names) * self.multiplicity

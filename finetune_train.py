@@ -46,7 +46,7 @@ from bootstrapping.buffer import CBBuffer
 from datasets.moad import MOAD
 from datasets.dataloader import DataLoader, DataListLoader
 
-from filtering.dataset import ListDataset
+from confidence.dataset import ListDataset
 from bootstrapping.parsing import parse_cb_args
 
 
@@ -132,7 +132,7 @@ def construct_datasets(args, t_to_sigma):
     return finetune_dataset, target_loader
 
 
-def inference_epoch(model, filtering_model, complex_graphs, filtering_complex_dict, device, t_to_sigma, args, filtering_args, confidence_cutoff, use_affinity_ligand=False):
+def inference_epoch(model, filtering_model, complex_graphs, filtering_complex_dict, device, t_to_sigma, args, filtering_args, confidence_cutoff):
     # Run inference and confidence model, return inference metrics and generated complexes above confidence cutoff
     t_schedule = get_t_schedule(sigma_schedule='expbeta', inference_steps=args.inference_steps,
                                 inf_sched_alpha=1, inf_sched_beta=1)
@@ -150,37 +150,6 @@ def inference_epoch(model, filtering_model, complex_graphs, filtering_complex_di
     confidences_list = []
     
     for orig_complex_graph in tqdm(loader):
-        if use_affinity_ligand:
-            # currently hardcoded for fad-binding cluster
-            rec_name = orig_complex_graph.name[0][:6]
-            pairs = np.load('data/BindingMOAD_2020_ab_processed_biounit/fad_binding_bindingdb_pairs.npy')
-            
-            smiles = None
-            if rec_name not in pairs[:, 0]:
-                print(f'Receptor {rec_name} is not in the affinity dataset, pairing it randomly.')
-                smiles = random.choice(pairs[:, 1])
-            else:
-                smiles = random.choice(pairs[pairs[:, 0] == rec_name][:, 1]) # randomly choose a ligand from the affinity dataset
-            mol = MolFromSmiles(smiles)
-            formula = Chem.rdMolDescriptors.CalcMolFormula(mol)
-            print(f'Using affinity pair {rec_name} and {formula} (smiles: {smiles})')
-            generate_conformer(mol)
-            orig_complex_graph = copy.deepcopy(orig_complex_graph)
-            
-            get_lig_graph(mol, orig_complex_graph)
-            
-            # to get edge_mask we can't use the orig_complex_graph because it contains the receptor.
-            _complex_graph = HeteroData()
-            get_lig_graph(mol, _complex_graph)
-            
-            print('Updating masks')
-            edge_mask, mask_rotate = get_transformation_mask(_complex_graph)
-            
-            orig_complex_graph['ligand'].edge_mask = torch.tensor(edge_mask)
-            orig_complex_graph['ligand'].mask_rotate = [mask_rotate]
-            orig_complex_graph['ligand'].batch = torch.zeros(orig_complex_graph['ligand'].x.shape[0], dtype=torch.int64)
-            print('Successfully updated complex graph to be affinity pair')
-
         torch.cuda.empty_cache()
         if filtering_model is not None and not (
                 filtering_args.use_original_model_cache or filtering_args.transfer_weights) and orig_complex_graph.name[0] not in filtering_complex_dict.keys():
@@ -191,13 +160,6 @@ def inference_epoch(model, filtering_model, complex_graphs, filtering_complex_di
         if filtering_model is not None and not (
                 filtering_args.use_original_model_cache or filtering_args.transfer_weights):
             filtering_complex = filtering_complex_dict[orig_complex_graph.name[0]]
-            if use_affinity_ligand:
-                fitlering_complex = copy.deepcopy(filtering_complex)
-                get_lig_graph(mol, filtering_complex)
-                filtering_complex['ligand'].edge_mask = torch.tensor(edge_mask)
-                filtering_complex['ligand'].mask_rotate = [mask_rotate]
-                filtering_complex['ligand'].batch = torch.zeros(orig_complex_graph['ligand'].x.shape[0], dtype=torch.int64)
-                
             filtering_data_list = [copy.deepcopy(filtering_complex) for _ in
                                     range(args.inference_samples)]
 
@@ -422,26 +384,12 @@ def inference_finetune(args, model, filtering_model, filtering_args, filtering_c
             inf_metrics = None
             iterations = args.initial_iterations if epoch == 0 else args.inference_iterations
             
-            if args.use_affinity_ligand:
-                # Inference for adding complexes
-                for i in range(iterations):
-                    _, compl, filtered_rmsds = inference_epoch(model, filtering_model, inf_dataset, filtering_complex_dict, device, t_to_sigma, args,
-                                                             filtering_args, confidence_cutoff, use_affinity_ligand=True)
-                    complexes.extend(compl)
-
-                # Inference for validation metrics'
-                for i in range(iterations):
-                    inf_m, compl, filtered_rmsds = inference_epoch(model, filtering_model, inf_dataset, filtering_complex_dict, device, t_to_sigma, args,
-                                                             filtering_args, confidence_cutoff)
-                    if inf_metrics is None: inf_metrics = {k:[] for k in inf_m if inf_m[k] is not None}
-                    for k in inf_metrics: inf_metrics[k].append(inf_m[k])
-            else:
-                for i in range(iterations):
-                    inf_m, compl, filtered_rmsds = inference_epoch(model, filtering_model, inf_dataset, filtering_complex_dict, device, t_to_sigma, args,
-                                                             filtering_args, confidence_cutoff)
-                    if inf_metrics is None: inf_metrics = {k:[] for k in inf_m if inf_m[k] is not None}
-                    for k in inf_metrics: inf_metrics[k].append(inf_m[k])
-                    complexes.extend(compl)
+            for i in range(iterations):
+                inf_m, compl, filtered_rmsds = inference_epoch(model, filtering_model, inf_dataset, filtering_complex_dict, device, t_to_sigma, args,
+                                                            filtering_args, confidence_cutoff)
+                if inf_metrics is None: inf_metrics = {k:[] for k in inf_m if inf_m[k] is not None}
+                for k in inf_metrics: inf_metrics[k].append(inf_m[k])
+                complexes.extend(compl)
 
             for k in inf_metrics: 
                 try:

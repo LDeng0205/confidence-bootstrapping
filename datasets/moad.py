@@ -83,7 +83,7 @@ class MOAD(Dataset):
         if split == 'train':
             split = 'PDBBind'
 
-        with open("./data/splits/MOAD_generalisation_splits.pkl", "rb") as f: # TODO make parameter
+        with open("./data/splits/MOAD_generalisation_splits.pkl", "rb") as f:
             self.split_clusters = pickle.load(f)[split]
 
         with open("data/BindingMOAD_2020_ab_processed_biounit/new_cluster_to_ligands.pkl", "rb") as f:
@@ -127,8 +127,8 @@ class MOAD(Dataset):
         print('removed', tot_before - len(self.ligands), 'ligands with no receptor out of', tot_before)
 
         if remove_pdbbind:
-            complexes_pdbbind = read_strings_from_txt('/data/rsg/nlp/gcorso/ligbind/data/splits/timesplit_no_lig_overlap_train') + read_strings_from_txt('/data/rsg/nlp/gcorso/ligbind/data/splits/timesplit_no_lig_overlap_val')
-            with open('/data/rsg/nlp/gcorso/ligbind/data/BindingMOAD_2020_ab_processed_biounit/ecod_t_group_binding_site_assignment_dict_major_domain.pkl', 'rb') as f:
+            complexes_pdbbind = read_strings_from_txt('/,,/data/splits/timesplit_no_lig_overlap_train') + read_strings_from_txt('../data/splits/timesplit_no_lig_overlap_val')
+            with open('../data/BindingMOAD_2020_ab_processed_biounit/ecod_t_group_binding_site_assignment_dict_major_domain.pkl', 'rb') as f:
                 pdbbind_to_cluster = pickle.load(f)
             clusters_pdbbind = set([pdbbind_to_cluster[c] for c in complexes_pdbbind])
             self.split_clusters = [c for c in self.split_clusters if c not in clusters_pdbbind]

@@ -128,7 +128,7 @@ def construct_loader(args, t_to_sigma, device):
                                                   temperature=args.bootstrapping_temperature,
                                                   max_per_complex=args.bootstrapping_dataset_max_per_complex)
 
-        if args.dataset in ['pdbbind', 'moad', 'generalisation', 'distillation']:
+        if args.dataset in ['pdbbind', 'moad', 'generalisation']:
             common_args = {'transform': transform, 'limit_complexes': args.limit_complexes,
                            'chain_cutoff': args.chain_cutoff, 'receptor_radius': args.receptor_radius,
                            'c_alpha_max_neighbors': args.c_alpha_max_neighbors,
@@ -139,19 +139,6 @@ def construct_loader(args, t_to_sigma, device):
                            'knn_only_graph': False if not hasattr(args, 'not_knn_only_graph') else not args.not_knn_only_graph,
                            'include_miscellaneous_atoms': False if not hasattr(args, 'include_miscellaneous_atoms') else args.include_miscellaneous_atoms,
                            'matching_tries': args.matching_tries}
-
-            if args.dataset == 'distillation': # TODO: Arthur - When is this ever used?
-                train_dataset = CBBuffer(complexes_save_dir=args.distillation_complexes_dir,
-                                                    cluster_name=args.distillation_train_cluster,
-                                                    results_path=args.inference_out_dir, confidence_cutoff=args.confidence_cutoff,
-                                                    transform=transform)
-
-                val_dataset = MOAD(cache_path=args.cache_path, split='val', single_cluster_name=args.distillation_train_cluster,
-                                   keep_original=True, multiplicity=args.val_multiplicity, max_receptor_size=args.max_receptor_size,
-                                    remove_promiscuous_targets=args.remove_promiscuous_targets, min_ligand_size=args.min_ligand_size,
-                                    esm_embeddings_sequences_path=args.moad_esm_embeddings_sequences_path,
-                                    unroll_clusters=args.unroll_clusters, root=args.moad_dir,
-                                    esm_embeddings_path=args.moad_esm_embeddings_path, **common_args)
 
             if args.dataset == 'pdbbind' or args.dataset == 'generalisation' or args.combined_training:
                 train_dataset = PDBBind(cache_path=args.cache_path, split_path=args.split_train, keep_original=True,

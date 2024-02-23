@@ -6,7 +6,7 @@ from rdkit.Chem import RemoveAllHs
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
-from filtering.dataset import ListDataset
+from confidence.dataset import ListDataset
 from utils import so3, torus
 from utils.molecules_utils import get_symmetry_rmsd
 from utils.sampling import randomize_position, sampling

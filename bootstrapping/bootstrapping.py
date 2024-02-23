@@ -9,7 +9,7 @@ from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
 from datasets.pdb import PDBSidechain, read_strings_from_txt
-from filtering.dataset import get_args_and_cache_path, ListDataset
+from confidence.dataset import get_args_and_cache_path, ListDataset
 from utils.diffusion_utils import get_t_schedule
 from utils.sampling import randomize_position, sampling
 from utils.diffusion_utils import t_to_sigma as t_to_sigma_compl
@@ -105,7 +105,7 @@ class BootstrappingDataset(Dataset):
         model = model.to(self.device)
         model.eval()
 
-        confidence_model = get_model(self.confidence_model_args, self.device, t_to_sigma=t_to_sigma, confidence_mode=True, no_parallel=True) # , old=True TODO remove old
+        confidence_model = get_model(self.confidence_model_args, self.device, t_to_sigma=t_to_sigma, confidence_mode=True, no_parallel=True)
         confidence_state_dict = torch.load(f'{self.confidence_model_dir}/{self.confidence_model_ckpt}', map_location=torch.device('cpu'))
         confidence_model.load_state_dict(confidence_state_dict, strict=True)
         confidence_model = confidence_model.to(self.device)

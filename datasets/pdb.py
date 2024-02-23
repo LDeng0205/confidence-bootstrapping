@@ -233,7 +233,7 @@ class PDBSidechain(Dataset):
             self.probabilities = torch.arange(1000) - self.vandermers_min_contacts + 1
             self.probabilities[:self.vandermers_min_contacts] = 0
         else:
-            with open('/data/rsg/nlp/gcorso/ligbind/data/pdbbind_counts.pkl', 'rb') as f:
+            with open('../data/pdbbind_counts.pkl', 'rb') as f:
                 pdbbind_counts = pickle.load(f)
 
             pdb_counts = torch.ones(1000)
@@ -527,7 +527,7 @@ class PDBSidechain(Dataset):
 
 
 if __name__ == "__main__":
-    dataset = PDBSidechain(root="/data/rsg/nlp/gcorso/ligbind/data/pdb_2021aug02_sample", split="train", multiplicity=1, limit_complexes=150)
+    dataset = PDBSidechain(root="../data/pdb_2021aug02_sample", split="train", multiplicity=1, limit_complexes=150)
     print(len(dataset))
     print(dataset[0])
     for p in dataset:

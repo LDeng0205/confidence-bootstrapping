@@ -19,7 +19,7 @@ import esm.data
 
 from datasets.loader import CombineDatasets
 from datasets.pdbbind import NoiseTransform
-from filtering.dataset import FilteringDataset, FilteringMOAD
+from confidence.dataset import FilteringDataset, FilteringMOAD
 from utils.training import AverageMeter
 
 from functools import partial
@@ -73,7 +73,6 @@ parser.add_argument('--rmsd_prediction', action='store_true', default=False, hel
 parser.add_argument('--rmsd_classification_cutoff', nargs='+', type=float, default=[2], help='RMSD value below which a prediction is considered a postitive. This can also be multiple cutoffs.')
 parser.add_argument('--rmsd_classification_upper', type=float, default=None, help='')
 parser.add_argument('--atom_rmsd_classification_cutoff', nargs='+', type=float, default=[2], help='RMSD value below which a prediction is considered a postitive. This can also be multiple cutoffs.')
-parser.add_argument('--affinity_prediction', action='store_true', default=False, help='Whether to jointly predict affinity')
 parser.add_argument('--confidence_loss_weight', type=float, default=1, help='Weight parameter for the confidence loss')
 
 
