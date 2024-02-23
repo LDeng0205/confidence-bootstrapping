@@ -173,7 +173,7 @@ def main_function():
 
     if args.wandb:
         wandb.init(
-            entity='coarse-graining-mit',
+            entity='entity',
             settings=wandb.Settings(start_method="fork"),
             project=args.project,
             name=args.run_name,
