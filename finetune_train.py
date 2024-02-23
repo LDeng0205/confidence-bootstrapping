@@ -196,14 +196,6 @@ def inference_epoch(model, filtering_model, complex_graphs, filtering_complex_di
                 print("Exception while running inference on complex:", e)
                 traceback.print_exc()
         
-        if use_affinity_ligand:
-            # Can't calculate any metrics or rmsds in the absence of ground truth structures.
-            print('Successfully ran sampling with affinity data')
-            print('conf:', confidences)
-            if confidences is None: continue
-            complexes_to_keep.extend([(predictions_list[i], confidences[i]) for i in range(args.inference_samples) if confidences[i] > confidence_cutoff])
-            continue
-        
         if failed_convergence_counter > 5: continue
         if args.no_torsion:
             orig_complex_graph['ligand'].orig_pos = (orig_complex_graph[
@@ -315,9 +307,6 @@ def inference_epoch(model, filtering_model, complex_graphs, filtering_complex_di
 
         else:
             complexes_to_keep.extend([(predictions_list[i], confidences[i]) for i in range(args.inference_samples) if confidences[i] > confidence_cutoff])
-    
-    if use_affinity_ligand:
-        return None, complexes_to_keep
     
     rmsds = np.array(rmsds)
     gnina_rmsds = np.array(gnina_rmsds_list) if args.gnina_minimize else None
