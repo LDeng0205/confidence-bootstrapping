@@ -457,101 +457,88 @@ def main_function():
 
     finetune_dataset, target_loader = construct_datasets(args, t_to_sigma)
     
-    # Load score model
+    # Load pretrained score model
+    assert args.pretrain_dir is not None
     model = get_model(args, device, t_to_sigma=t_to_sigma)
     optimizer, _ = get_optimizer_and_scheduler(args, model, scheduler_mode='min')
     ema_weights = ExponentialMovingAverage(model.parameters(),decay=args.ema_rate)
 
-    if args.restart_dir:
-        try:
-            dict = torch.load(f'{args.restart_dir}/{args.restart_ckpt}.pt', map_location=torch.device('cpu'))
-            if args.restart_lr is not None: dict['optimizer']['param_groups'][0]['lr'] = args.restart_lr
-            optimizer.load_state_dict(dict['optimizer'])
-            model.module.load_state_dict(dict['model'], strict=True)
-            if hasattr(args, 'ema_rate'):
-                ema_weights.load_state_dict(dict['ema_weights'], device=device)
-            print("Restarting from epoch", dict['epoch'])
-        except Exception as e:
-            print("Exception", e)
-            dict = torch.load(f'{args.restart_dir}/best_ema_inference_epoch_model.pt', map_location=torch.device('cpu'))
-            model.module.load_state_dict(dict, strict=True)
-            print("Due to exception had to take the best_ema_inference_epoch_model epoch and no optimiser")
-    elif args.pretrain_dir:
-        dict = torch.load(f'{args.pretrain_dir}/{args.pretrain_ckpt}.pt', map_location=torch.device('cpu'))
-        model.module.load_state_dict(dict, strict=True)
-        print("Using pretrained model", f'{args.pretrain_dir}/{args.pretrain_ckpt}.pt')
+    dict = torch.load(f'{args.pretrain_dir}/{args.pretrain_ckpt}.pt', map_location=torch.device('cpu'))
+    model.module.load_state_dict(dict, strict=True)
+    print("Using pretrained model", f'{args.pretrain_dir}/{args.pretrain_ckpt}.pt')
 
     numel = sum([p.numel() for p in model.parameters()])
     print('SUCCESS| Score Model with', numel, 'parameters')
 
-    # Loading filtering model
-    if args.filtering_model_dir is not None:
-        with open(f'{args.filtering_model_dir}/model_parameters.yml') as f:
-            filtering_args = Namespace(**yaml.full_load(f))
-        if not os.path.exists(filtering_args.original_model_dir):
-            print("Path does not exist: ", filtering_args.original_model_dir)
-            filtering_args.original_model_dir = os.path.join(*filtering_args.original_model_dir.split('/')[-2:])
-            print('instead trying path: ', filtering_args.original_model_dir)
-        if not hasattr(filtering_args, 'use_original_model_cache'):
-            filtering_args.use_original_model_cache = True
-        if not hasattr(filtering_args, 'esm_embeddings_path'):
-            filtering_args.esm_embeddings_path = None
-        if not hasattr(filtering_args, 'num_classification_bins'):
-            filtering_args.num_classification_bins = 2
+    # Loading confidence (filtering) model
+    assert args.filtering_model_dir is not None
+
+    with open(f'{args.filtering_model_dir}/model_parameters.yml') as f:
+        filtering_args = Namespace(**yaml.full_load(f))
+    if not os.path.exists(filtering_args.original_model_dir):
+        print("Path does not exist: ", filtering_args.original_model_dir)
+        filtering_args.original_model_dir = os.path.join(*filtering_args.original_model_dir.split('/')[-2:])
+        print('instead trying path: ', filtering_args.original_model_dir)
+    if not hasattr(filtering_args, 'use_original_model_cache'):
+        filtering_args.use_original_model_cache = True
+    if not hasattr(filtering_args, 'esm_embeddings_path'):
+        filtering_args.esm_embeddings_path = None
+    if not hasattr(filtering_args, 'num_classification_bins'):
+        filtering_args.num_classification_bins = 2
 
     filtering_complex_dict = None
-    if args.filtering_model_dir is not None:
-        if not (filtering_args.use_original_model_cache or filtering_args.transfer_weights):
-            # if the filtering model uses the same type of data as the original model then we do not need this dataset and can just use the complexes
-            print('HAPPENING | filtering model uses different type of graphs than the score model. Loading (or creating if not existing) the data for the filtering model now.')
-            filtering_test_dataset = get_filtering_dataset(args, filtering_args)
-            filtering_complex_dict = filtering_test_dataset.get_all_complexes()
 
-    if args.filtering_model_dir is not None:
-        if filtering_args.transfer_weights:
-            with open(f'{filtering_args.original_model_dir}/model_parameters.yml') as f:
-                filtering_model_args = Namespace(**yaml.full_load(f))
-            if not hasattr(filtering_model_args, 'separate_noise_schedule'):  # exists for compatibility with old runs that did not have the
-                # attribute
-                filtering_model_args.separate_noise_schedule = False
-            if not hasattr(filtering_model_args, 'lm_embeddings_path'):
-                filtering_model_args.lm_embeddings_path = None
-            if not hasattr(filtering_model_args, 'tr_only_confidence'):
-                filtering_model_args.tr_only_confidence = True
-            if not hasattr(filtering_model_args, 'high_confidence_threshold'):
-                filtering_model_args.high_confidence_threshold = 0.0
-            if not hasattr(filtering_model_args, 'include_confidence_prediction'):
-                filtering_model_args.include_confidence_prediction = False
-            if not hasattr(filtering_model_args, 'confidence_dropout'):
-                filtering_model_args.confidence_dropout = filtering_model_args.dropout
-            if not hasattr(filtering_model_args, 'confidence_no_batchnorm'):
-                filtering_model_args.confidence_no_batchnorm = False
-            if not hasattr(filtering_model_args, 'confidence_weight'):
-                filtering_model_args.confidence_weight = 1
-            if not hasattr(filtering_model_args, 'asyncronous_noise_schedule'):
-                filtering_model_args.asyncronous_noise_schedule = False
-            if not hasattr(filtering_model_args, 'correct_torsion_sigmas'):
-                filtering_model_args.correct_torsion_sigmas = False
-            if not hasattr(filtering_model_args, 'esm_embeddings_path'):
-                filtering_model_args.esm_embeddings_path = None
-            if not hasattr(filtering_model_args, 'not_fixed_knn_radius_graph'):
-                filtering_model_args.not_fixed_knn_radius_graph = True
-            if not hasattr(filtering_model_args, 'not_knn_only_graph'):
-                filtering_model_args.not_knn_only_graph = True
-        else:
-            filtering_model_args = filtering_args
+    if not (filtering_args.use_original_model_cache or filtering_args.transfer_weights):
+        # if the filtering model uses the same type of data as the original model then we do not need this dataset and can just use the complexes
+        print('HAPPENING | filtering model uses different type of graphs than the score model. Loading (or creating if not existing) the data for the filtering model now.')
+        filtering_test_dataset = get_filtering_dataset(args, filtering_args)
+        filtering_complex_dict = filtering_test_dataset.get_all_complexes()
 
-        filtering_model = get_model(filtering_model_args, device, t_to_sigma=t_to_sigma, no_parallel=True,
-                                    confidence_mode=True)
-        state_dict = torch.load(f'{args.filtering_model_dir}/{args.filtering_ckpt}', map_location=torch.device('cpu'))
-        filtering_model.load_state_dict(state_dict, strict=True)
-        filtering_model = filtering_model.to(device)
-        filtering_model.eval()
+    if filtering_args.transfer_weights:
+        with open(f'{filtering_args.original_model_dir}/model_parameters.yml') as f:
+            filtering_model_args = Namespace(**yaml.full_load(f))
+        if not hasattr(filtering_model_args, 'separate_noise_schedule'):  # exists for compatibility with old runs that did not have the
+            # attribute
+            filtering_model_args.separate_noise_schedule = False
+        if not hasattr(filtering_model_args, 'lm_embeddings_path'):
+            filtering_model_args.lm_embeddings_path = None
+        if not hasattr(filtering_model_args, 'tr_only_confidence'):
+            filtering_model_args.tr_only_confidence = True
+        if not hasattr(filtering_model_args, 'high_confidence_threshold'):
+            filtering_model_args.high_confidence_threshold = 0.0
+        if not hasattr(filtering_model_args, 'include_confidence_prediction'):
+            filtering_model_args.include_confidence_prediction = False
+        if not hasattr(filtering_model_args, 'confidence_dropout'):
+            filtering_model_args.confidence_dropout = filtering_model_args.dropout
+        if not hasattr(filtering_model_args, 'confidence_no_batchnorm'):
+            filtering_model_args.confidence_no_batchnorm = False
+        if not hasattr(filtering_model_args, 'confidence_weight'):
+            filtering_model_args.confidence_weight = 1
+        if not hasattr(filtering_model_args, 'asyncronous_noise_schedule'):
+            filtering_model_args.asyncronous_noise_schedule = False
+        if not hasattr(filtering_model_args, 'correct_torsion_sigmas'):
+            filtering_model_args.correct_torsion_sigmas = False
+        if not hasattr(filtering_model_args, 'esm_embeddings_path'):
+            filtering_model_args.esm_embeddings_path = None
+        if not hasattr(filtering_model_args, 'not_fixed_knn_radius_graph'):
+            filtering_model_args.not_fixed_knn_radius_graph = True
+        if not hasattr(filtering_model_args, 'not_knn_only_graph'):
+            filtering_model_args.not_knn_only_graph = True
     else:
-        filtering_model = None
-        filtering_args = None
-        filtering_model_args = None
+        filtering_model_args = filtering_args
 
+    filtering_model = get_model(filtering_model_args, device, t_to_sigma=t_to_sigma, no_parallel=True,
+                                confidence_mode=True)
+    state_dict = torch.load(f'{args.filtering_model_dir}/{args.filtering_ckpt}', map_location=torch.device('cpu'))
+    filtering_model.load_state_dict(state_dict, strict=True)
+
+    numel = sum([p.numel() for p in filtering_model.parameters()])
+    print('SUCCESS| Confidence Model with', numel, 'parameters')
+
+    filtering_model = filtering_model.to(device)
+    filtering_model.eval()
+
+    
     if args.wandb:
         wandb.log({'numel': numel})
 
