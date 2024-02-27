@@ -1,4 +1,4 @@
-# The Discovery of Binding Modes Rrequires Rethinking Docking Generalization
+# DEEP CONFIDENT STEPS TO NEW POCKETS: STRATEGIES FOR DOCKING GENERALIZATION
 
 Here we provide our implementation of the Confidence Bootstrapping method, pretrained diffusion and confidence models, and processed receptors from the DockGen-clusters validation and test sets. 
 
