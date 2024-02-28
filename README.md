@@ -1,5 +1,7 @@
 # DEEP CONFIDENT STEPS TO NEW POCKETS: STRATEGIES FOR DOCKING GENERALIZATION
 
+In progress...
+<!-- 
 Here we provide our implementation of the Confidence Bootstrapping method, pretrained diffusion and confidence models, and processed receptors from the DockGen-clusters validation and test sets. 
 
 ## Dataset
@@ -46,4 +48,4 @@ Note that the command above is not the same as the one used in experiments in th
     2. unzip the directory and place it into `data` such that you have the path `data/PDBBind_processed`
 
 Then, we can run the finetuning command with `--keep_original_train` and `--totoal_trainset_size 100` to reproduce paper numbers.
-
+ -->
