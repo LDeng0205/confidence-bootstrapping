@@ -392,8 +392,6 @@ def inference_finetune(args, model, filtering_model, filtering_args, filtering_c
             
             torch.save(state_dict, os.path.join(run_dir, f'epoch{epoch+1}_model.pt'))
             torch.save(ema_state_dict, os.path.join(run_dir, f'epoch{epoch+1}_ema_inference_epoch_model.pt'))
-            shutil.copyfile(os.path.join(run_dir, 'best_model.pt'),
-                            os.path.join(run_dir, f'epoch{epoch+1}_best_model.pt'))
 
 
         torch.save({

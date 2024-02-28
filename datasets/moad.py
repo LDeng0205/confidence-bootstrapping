@@ -330,7 +330,6 @@ class MOAD(Dataset):
                 map_fn = p.imap_unordered if self.num_workers > 1 else map
                 for t in map_fn(self.get_receptor, zip(receptor_names, [sequences_to_embeddings]*len(receptor_names))):
                     if t is not None:
-                        print(len(receptor_graphs))
                         receptor_graphs.append(t)
                     pbar.update()
             if self.num_workers > 1: p.__exit__(None, None, None)
