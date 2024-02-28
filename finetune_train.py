@@ -10,7 +10,6 @@ from rdkit import Chem
 import wandb
 import torch
 import numpy as np
-import esm.data
 import rdkit.Chem as Chem
 
 from tqdm import tqdm
