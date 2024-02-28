@@ -9,7 +9,7 @@ from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
 
 parser = ArgumentParser()
-parser.add_argument('--data_dir', type=str, default='../data/BindingMOAD_2020_ab_processed_biounit/pdb_protein/', help='')
+parser.add_argument('--data_dir', type=str, default='data/BindingMOAD_2020_processed/pdb_protein/', help='')
 parser.add_argument('--out_file', type=str, default="../../distillation/moad_mapping.pkl")
 args = parser.parse_args()
 
