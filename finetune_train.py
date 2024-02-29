@@ -22,7 +22,6 @@ import traceback
 
 from datasets.loader import CombineDatasets
 from datasets.process_mols import generate_conformer, get_lig_graph
-from utils.gnina_utils import get_gnina_poses, invert_permutation
 from utils.molecules_utils import get_symmetry_rmsd
 
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -144,7 +143,7 @@ def inference_epoch(model, filtering_model, complex_graphs, filtering_complex_di
 
     dataset = ListDataset(complex_graphs)
     loader = DataLoader(dataset=dataset, batch_size=1, shuffle=False)
-    rmsds, min_rmsds, top_rmsds, gnina_rmsds_list = [], [], [], []
+    rmsds, min_rmsds, top_rmsds = [], [], []
     complexes_to_keep = []
     confidences_list = []
     
@@ -230,91 +229,14 @@ def inference_epoch(model, filtering_model, complex_graphs, filtering_complex_di
         if args.oracle_confidence:
             confidences = - 4 * np.tanh(2 * rmsd / 3 - 2)
 
-        if args.gnina_minimize:
-            print('Running gnina on all predicted ligand positions for energy minimization.')
-            gnina_rmsds, gnina_scores = [], []
-            lig = copy.deepcopy(orig_complex_graph.mol[0])
-            positions = np.asarray([complex_graph['ligand'].pos.cpu().numpy() for complex_graph in data_list])
-            gnina_positions = []
-
-            conf = confidences
-            if conf is not None:
-                conf = conf.cpu().numpy()
-                conf = np.nan_to_num(conf, nan=-1e-6)
-                re_order = np.argsort(conf)[::-1]
-                positions = positions[re_order]
-                predictions_list = [predictions_list[i] for i in re_order]
-    
-            # Run the subprocesses in parallel
-            run_dir = os.path.join(args.log_dir, args.run_name)
-            gnina_logs_dir = os.path.join(run_dir, "gnina_logs")
-            args.out_dir = run_dir
-            
-            if not os.path.exists(gnina_logs_dir):
-                print(f'Make gnina logs dir: {gnina_logs_dir}')
-                os.makedirs(gnina_logs_dir)
-                
-            if args.gnina_parallel:
-                print('Running gnina subprocesses in parallel')
-                input_list = [(args, lig, pos, orig_complex_graph.original_center.cpu().numpy(), orig_complex_graph.name[0], tid) for tid, pos in enumerate(positions[:args.gnina_poses_to_optimize])]
-                with ThreadPoolExecutor(max_workers=4) as executor:
-                    gnina_output_list = list(executor.map(lambda params: get_gnina_poses(*params), input_list))
-            else:
-                print('Running gnina subprocesses sequentially')
-                gnina_output_list = [get_gnina_poses(args, lig, pos,
-                                       orig_complex_graph.original_center.cpu().numpy(),
-                                       orig_complex_graph.name[0]) for pos in positions[:args.gnina_poses_to_optimize]]
-            
-            # for pos in positions[:args.gnina_poses_to_optimize]:
-            #     gnina_ligand_pos, gnina_mol, gnina_score = get_gnina_poses(args, lig, pos,
-            #                                                                orig_complex_graph.original_center.cpu().numpy(),
-            #                                                                orig_complex_graph.name[0])
-            
-            # Process gnina RMSDs
-            for idx in range(args.gnina_poses_to_optimize):
-                pos = positions[idx]
-                gnina_ligand_pos, gnina_mol, gnina_score = gnina_output_list[idx]
-                _rmsds = []
-                for i in range(len(orig_ligand_pos)):
-                    try:
-                        rmsd, (idx1, idx2) = get_symmetry_rmsd(mol, orig_ligand_pos[i], gnina_ligand_pos, gnina_mol, return_permutation=True)
-                        inv_idx1 = invert_permutation(idx1)
-                        gnina_ligand_pos = gnina_ligand_pos[idx2][inv_idx1]
-                        test_rmsd = np.sqrt(((gnina_ligand_pos - orig_ligand_pos[i]) ** 2).sum(axis=1).mean(axis=0))
-                        # print(rmsd, test_rmsd, "should be close")
-                    except Exception as e:
-                        print("Using non corrected RMSD because of the error:", e, "and giving back the score model position")
-                        print(Chem.MolToSmiles(mol))
-                        print(Chem.MolToSmiles(gnina_mol))
-                        rmsd = np.sqrt(((gnina_ligand_pos - orig_ligand_pos[i]) ** 2).sum(axis=1).mean(axis=0))
-                        gnina_ligand_pos = pos
-                    _rmsds.append(rmsd)
-                _rmsds = np.asarray(_rmsds)
-                rmsd = np.min(_rmsds, axis=0)
-                gnina_rmsds.append(rmsd)
-                gnina_scores.append(gnina_score)
-                gnina_positions.append(gnina_ligand_pos)
-
-            gnina_rmsds = np.asarray(gnina_rmsds)
-            gnina_scores = np.asarray(gnina_scores)
-            gnina_rmsds_list.extend([r for r in gnina_rmsds])
-
-            for i in range(len(gnina_positions)):
-                if gnina_scores[i] > confidence_cutoff:
-                    predictions_list[i]['ligand'].pos = torch.from_numpy(gnina_positions[i]).float().to(device)
-                    complexes_to_keep.append((predictions_list[i], gnina_scores[i]))
-
-        else:
-            complexes_to_keep.extend([(predictions_list[i], confidences[i]) for i in range(args.inference_samples) if confidences[i] > confidence_cutoff])
+        complexes_to_keep.extend([(predictions_list[i], confidences[i]) for i in range(args.inference_samples) if confidences[i] > confidence_cutoff])
     
     rmsds = np.array(rmsds)
-    gnina_rmsds = np.array(gnina_rmsds_list) if args.gnina_minimize else None
     min_rmsds = np.array(min_rmsds)
     top_rmsds = np.array(top_rmsds)
     confidences_list = np.array(confidences_list)
 
     losses = {'rmsds_lt2': (100 * (rmsds < 2).sum() / len(rmsds)),
-              'gnina_rmsds_lt2': (100 * (gnina_rmsds < 2).sum() / len(gnina_rmsds)) if args.gnina_minimize else None,
               'rmsds_lt5': (100 * (rmsds < 5).sum() / len(rmsds)),
               'filtered_rmsds_lt2': (100 * (top_rmsds < 2).sum() / len(min_rmsds)),
               'filtered_rmsds_lt5': (100 * (top_rmsds < 5).sum() / len(min_rmsds)),

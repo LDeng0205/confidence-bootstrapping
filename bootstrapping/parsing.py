@@ -10,7 +10,7 @@ def parse_cb_args():
     parser.add_argument('--pretrain_dir', type=str, help='Folder of pretrained model from which to restart')
     parser.add_argument('--pretrain_ckpt', type=str, help='')
     parser.add_argument('--cache_path', type=str, default='data/cacheMOAD', help='Folder from where to load/restore cached dataset')
-    parser.add_argument('--moad_dir', type=str, default='data/BindingMOAD_2020_ab_processed_biounit/', help='Folder containing original structures')
+    parser.add_argument('--moad_dir', type=str, default='data/BindingMOAD_2020_processed/', help='Folder containing original structures')
     parser.add_argument('--cb_inference_freq', type=int, default=5, help='Frequency of epochs for which to run inference to add to the buffer')
     parser.add_argument('--save_model_freq', type=int, default=None, help='')
     parser.add_argument('--inference_samples', type=int, default=1, help='')
@@ -169,13 +169,6 @@ def parse_cb_args():
     parser.add_argument('--buffer_sampling_beta', type=float, default=1, help='Beta parameter of beta distribution for sampling t for buffer complexes')
     parser.add_argument('--reset_buffer', action='store_true', default=False, help='Flush buffer every time complexes are added (equivalent to no buffer)')
     parser.add_argument('--save_final_rmsds', action='store_true', default=False, help='')
-    
-    parser.add_argument('--gnina_minimize', action='store_true', default=False, help='')
-    parser.add_argument('--gnina_log_file', type=str, default='gnina_log.txt', help='') # To redirect gnina subprocesses stdouts from the terminal window
-    parser.add_argument('--gnina_full_dock', action='store_true', default=True, help='')
-    parser.add_argument('--gnina_autobox_add', type=float, default=4.0)
-    parser.add_argument('--gnina_poses_to_optimize', type=int, default=1)
-    parser.add_argument('--gnina_parallel', action='store_true', default=False, help='')
     
     args = parser.parse_args()
 

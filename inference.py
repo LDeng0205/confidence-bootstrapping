@@ -3,7 +3,6 @@ import os
 import torch
 import esm.data
 from datasets.moad import MOAD
-from utils.gnina_utils import get_gnina_poses
 from utils.molecules_utils import get_symmetry_rmsd
 
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -134,8 +133,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--dataset', type=str, default='moad', help='')
     parser.add_argument('--cache_path', type=str, default='data/cacheMOAD', help='Folder from where to load/restore cached dataset')
-    parser.add_argument('--data_dir', type=str, default='data/BindingMOAD_2020_ab_processed_biounit/', help='Folder containing original structures')
-    parser.add_argument('--split_path', type=str, default='data/BindingMOAD_2020_ab_processed/splits/val.txt', help='Path of file defining the split')
+    parser.add_argument('--data_dir', type=str, default='data/BindingMOAD_2020_processed/', help='Folder containing original structures')
+    parser.add_argument('--split_path', type=str, default='data/BindingMOAD_2020_processed/splits/val.txt', help='Path of file defining the split')
 
     parser.add_argument('--no_model', action='store_true', default=False, help='Whether to return seed conformer without running model')
     parser.add_argument('--no_random', action='store_true', default=False, help='Whether to add randomness in diffusion steps')
@@ -204,12 +203,6 @@ if __name__ == '__main__':
     parser.add_argument('--temp_sampling_tor', type=float, default=1.0)
     parser.add_argument('--temp_psi_tor', type=float, default=0.0)
     parser.add_argument('--temp_sigma_data', type=float, default=0.5)
-    parser.add_argument('--gnina_minimize', action='store_true', default=False, help='')
-    parser.add_argument('--gnina_log_file', type=str, default='gnina_log.txt', help='') # To redirect gnina subprocesses stdouts from the terminal window
-    parser.add_argument('--gnina_full_dock', action='store_true', default=False, help='')
-    parser.add_argument('--save_gnina_metrics', action='store_true', default=False, help='')
-    parser.add_argument('--gnina_autobox_add', type=float, default=4.0)
-    parser.add_argument('--gnina_poses_to_optimize', type=int, default=1)
     parser.add_argument('--single_cluster_name', type=str, default=None, help='')
     
     args = parser.parse_args()
@@ -404,19 +397,14 @@ if __name__ == '__main__':
 
     rmsds_list, obrmsds, centroid_distances_list, failures, skipped, min_cross_distances_list, base_min_cross_distances_list, confidences_list, names_list = [], [], [], 0, 0, [], [], [], []
     true_affinities_list, pred_affinities_list, run_times, min_self_distances_list, without_rec_overlap_list = [], [], [], [], []
-    gnina_rmsds_list, gnina_score_list = [], []
     N = args.samples_per_complex
     #names_no_rec_overlap = read_strings_from_txt(f'data/splits/timesplit_test_no_rec_overlap')
-    names_no_rec_overlap = np.load("data/BindingMOAD_2020_ab_processed_biounit/test_names_bootstrapping.npy")
+    names_no_rec_overlap = np.load("data/BindingMOAD_2020_processed/test_names_bootstrapping.npy")
     print('Size of test dataset: ', len(test_dataset))
 
     #limit_test = ['3zlw']
     if args.save_complexes:
         sampled_complexes = {}
-
-    if args.save_gnina_metrics:
-        # key is complex_name, value is the gnina metrics for all samples
-        gnina_metrics = {}
 
     for idx, orig_complex_graph in tqdm(enumerate(test_loader)):
         torch.cuda.empty_cache()
@@ -526,44 +514,6 @@ if __name__ == '__main__':
                 ligand_pos = np.asarray(
                         [complex_graph['ligand'].pos.cpu().numpy()[filterHs] for complex_graph in data_list])
 
-                # Use gnina to minimize energy for predicted ligands.
-                if args.gnina_minimize:
-                    print('Running gnina on all predicted ligand positions for energy minimization.')
-                    gnina_rmsds, gnina_scores = [], []
-                    lig = copy.deepcopy(orig_complex_graph.mol[0])
-                    positions = np.asarray([complex_graph['ligand'].pos.cpu().numpy() for complex_graph in data_list])
-
-                    conf = confidence
-                    if conf is not None and isinstance(filtering_args.rmsd_classification_cutoff, list):
-                        conf = conf[:, 0]
-                    if conf is not None:
-                        conf = conf.cpu().numpy()
-                        conf = np.nan_to_num(conf, nan=-1e-6)
-                        re_order = np.argsort(conf)[::-1]
-                        positions = positions[re_order]
-
-                    for pos in positions[:args.gnina_poses_to_optimize]:
-                        gnina_ligand_pos, gnina_mol, gnina_score = get_gnina_poses(args, lig, pos, orig_complex_graph.original_center.cpu().numpy(), orig_complex_graph.name[0])
-
-                        mol = RemoveAllHs(orig_complex_graph.mol[0])
-                        rmsds = []
-                        for i in range(len(orig_ligand_pos)):
-                            try:
-                                rmsd = get_symmetry_rmsd(mol, orig_ligand_pos[i], gnina_ligand_pos, gnina_mol)
-                            except Exception as e:
-                                print("Using non corrected RMSD because of the error:", e)
-                                rmsd = np.sqrt(((gnina_ligand_pos - orig_ligand_pos[i]) ** 2).sum(axis=1).mean(axis=0))
-                            rmsds.append(rmsd)
-                        rmsds = np.asarray(rmsds)
-                        rmsd = np.min(rmsds, axis=0)
-                        gnina_rmsds.append(rmsd)
-                        gnina_scores.append(gnina_score)
-
-                    gnina_rmsds = np.asarray(gnina_rmsds)
-                    assert gnina_rmsds.shape == (args.gnina_poses_to_optimize,), str(gnina_rmsds.shape) + " " + str(args.gnina_poses_to_optimize)
-                    gnina_rmsds_list.append(gnina_rmsds)
-                    gnina_scores = np.asarray(gnina_scores)
-                    gnina_score_list.append(gnina_scores)
 
                 mol = RemoveAllHs(orig_complex_graph.mol[0])
                 rmsds = []
@@ -586,8 +536,7 @@ if __name__ == '__main__':
                     confidence = np.nan_to_num(confidence, nan=-1e-6)
                     re_order = np.argsort(confidence)[::-1]
                     print(orig_complex_graph['name'], ' rmsd', np.around(rmsd, 1)[re_order], ' centroid distance',
-                          np.around(centroid_distance, 1)[re_order], ' confidences ', np.around(confidence, 4)[re_order],
-                          (' gnina rmsd ' + str(np.around(gnina_rmsds, 1))) if args.gnina_minimize else '')
+                          np.around(centroid_distance, 1)[re_order], ' confidences ', np.around(confidence, 4)[re_order])
                     confidences_list.append(confidence)
                 else:
                     print(orig_complex_graph['name'], ' rmsd', np.around(rmsd, 1), ' centroid distance',
@@ -640,10 +589,6 @@ if __name__ == '__main__':
             with open(os.path.join(args.complexes_save_path, "ligands.pkl"), 'wb') as f:
                 pickle.dump(sampled_complexes, f)
     
-    if args.save_gnina_metrics:
-        with open(f'{args.out_dir}/gnina_metrics.pkl', 'wb') as f:
-            pickle.dump(gnina_metrics, f)
-        print("Saved gnina metrics")
 
     performance_metrics = {}
     for overlap in ['', 'no_overlap_']:
@@ -658,13 +603,9 @@ if __name__ == '__main__':
             else:
                 confidences = np.array(confidences_list)
             names = np.array(names_list)[without_rec_overlap]
-            gnina_rmsds = np.array(gnina_rmsds_list)[without_rec_overlap] if args.gnina_minimize else None
-            gnina_score = np.array(gnina_score_list)[without_rec_overlap] if args.gnina_minimize else None
 
         else:
             rmsds = np.array(rmsds_list)
-            gnina_rmsds = np.array(gnina_rmsds_list) if args.gnina_minimize else None
-            gnina_score = np.array(gnina_score_list) if args.gnina_minimize else None
             min_self_distances = np.array(min_self_distances_list)
             centroid_distances = np.array(centroid_distances_list)
             confidences = np.array(confidences_list)
@@ -677,11 +618,8 @@ if __name__ == '__main__':
         np.save(f'{args.out_dir}/{overlap}confidences.npy', confidences)
         np.save(f'{args.out_dir}/{overlap}run_times.npy', run_times)
         np.save(f'{args.out_dir}/{overlap}complex_names.npy', np.array(names))
-        np.save(f'{args.out_dir}/{overlap}gnina_rmsds.npy', gnina_rmsds)
-        np.save(f'{args.out_dir}/{overlap}gnina_score.npy', gnina_score)
 
         print(rmsds)
-        print(gnina_rmsds)
 
         performance_metrics.update({
             f'{overlap}run_times_std': run_times.std().__round__(2),
@@ -703,22 +641,6 @@ if __name__ == '__main__':
             f'{overlap}centroid_percentile_75': np.percentile(centroid_distances, 75).round(2),
         })
 
-        if args.gnina_minimize:
-            score_ordering = np.argsort(gnina_score, axis=1)[:, ::-1]
-            filtered_rmsds_gnina = gnina_rmsds[np.arange(gnina_rmsds.shape[0])[:, None], score_ordering][:, 0]
-
-            performance_metrics.update({
-                f'{overlap}gnina_rmsds_below_2': (100 * (gnina_rmsds < 2).sum() / len(gnina_rmsds) / args.gnina_poses_to_optimize) if args.gnina_minimize else None,
-                f'{overlap}gnina_rmsds_below_5': (100 * (gnina_rmsds < 5).sum() / len(gnina_rmsds) / args.gnina_poses_to_optimize) if args.gnina_minimize else None,
-                f'{overlap}gnina_min_rmsds_below_2': (100 * (np.min(gnina_rmsds, axis=1) < 2).sum() / len(gnina_rmsds)) if args.gnina_minimize else None,
-                f'{overlap}gnina_min_rmsds_below_5': (100 * (np.min(gnina_rmsds, axis=1) < 5).sum() / len(gnina_rmsds)) if args.gnina_minimize else None,
-                f'{overlap}gnina_filtered_rmsds_below_2': (100 * (filtered_rmsds_gnina < 2).sum() / len(filtered_rmsds_gnina)).__round__(2),
-                f'{overlap}gnina_filtered_rmsds_below_5': (100 * (filtered_rmsds_gnina < 5).sum() / len(filtered_rmsds_gnina)).__round__(2),
-                f'{overlap}gnina_rmsds_percentile_25': np.percentile(gnina_rmsds, 25).round(2),
-                f'{overlap}gnina_rmsds_percentile_50': np.percentile(gnina_rmsds, 50).round(2),
-                f'{overlap}gnina_rmsds_percentile_75': np.percentile(gnina_rmsds, 75).round(2),
-
-            })
 
         if N >= 5:
             top5_rmsds = np.min(rmsds[:, :5], axis=1)
