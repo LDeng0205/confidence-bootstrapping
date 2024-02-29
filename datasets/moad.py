@@ -127,7 +127,7 @@ class MOAD(Dataset):
         print('removed', tot_before - len(self.ligands), 'ligands with no receptor out of', tot_before)
 
         if remove_pdbbind:
-            complexes_pdbbind = read_strings_from_txt('/,,/data/splits/timesplit_no_lig_overlap_train') + read_strings_from_txt('../data/splits/timesplit_no_lig_overlap_val')
+            complexes_pdbbind = read_strings_from_txt('/../data/splits/timesplit_no_lig_overlap_train') + read_strings_from_txt('../data/splits/timesplit_no_lig_overlap_val')
             with open('../data/BindingMOAD_2020_processed/ecod_t_group_binding_site_assignment_dict_major_domain.pkl', 'rb') as f:
                 pdbbind_to_cluster = pickle.load(f)
             clusters_pdbbind = set([pdbbind_to_cluster[c] for c in complexes_pdbbind])

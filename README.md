@@ -5,7 +5,12 @@ Here we provide our implementation of the Confidence Bootstrapping method, pretr
 
 ## Dataset
 
-The DockGen benchmark can be downloaded from Zenodo: https://zenodo.org/records/10656052. All 189 complexes in the DockGen test set can be found in `data/BindingMOAD_2020_processed/test_names.npy`, and the 85 complexes from DockGen-clusters can be found in `data/BindingMOAD_2020_processed/test_names_bootstrapping.npy`. The list of complexes in the DockGen benchmark can also be found at `data/BindingMOAD_2020_processed/new_cluster_to_ligands.pkl`, which is a dictionary with cluster names as keys and lists of ligand names as values. Complexes from Binding MOAD should be downloaded also to `data/BindingMOAD_2020_processed`. Here, we also provide the processed receptors at `data/MOAD_new_test_processed` and `data/MOAD_new_val_processed`.
+The DockGen benchmark can be downloaded from Zenodo (https://zenodo.org/records/10656052) by running 
+
+    curl -o data/BindingMOAD_2020_processed.tar https://zenodo.org/records/10656052/files/BindingMOAD_2020_processed.tar
+    curl -o data/DockGen.tar https://zenodo.org/records/10656052/files/DockGen.tar
+
+After extraction, all 189 complexes in the DockGen test set can be found in `data/BindingMOAD_2020_processed/test_names.npy`, and the 85 complexes from DockGen-clusters can be found in `data/BindingMOAD_2020_processed/test_names_bootstrapping.npy`. The list of complexes in the DockGen benchmark can also be found at `data/BindingMOAD_2020_processed/new_cluster_to_ligands.pkl`, which is a dictionary with cluster names as keys and lists of ligand names as values. The downloaded files contain processed ligands and receptors from Binding MOAD. 
 
 ## Setup
 
@@ -21,7 +26,7 @@ Activate the environment
 
 In order to run the diffusion model, we need to generate ESM2 embeddings for complexes in Binding MOAD. First we prepare sequences:
 
-    python datasets/moad_lm_embedding_preparation.py --data_dir data/MOAD_new_test_processed
+    python datasets/moad_lm_embedding_preparation.py --data_dir data/BindingMOAD_2020_processed/pdb_protein
 
 Then, we install esm and generate embeddings for the test proteins:
     
@@ -37,9 +42,9 @@ Then we convert the embeddings to a single `.pt` file:
 
 ## Running finetuning:
 
-After downloading the complexes from Binding MOAD, we can run the Confidence Bootstrapping finetuning on a cluster like `Homo-oligomeric flavin-containing Cys decarboxylases, HFCD`:
+Finally, we can run the Confidence Bootstrapping finetuning on a cluster like `Homo-oligomeric flavin-containing Cys decarboxylases, HFCD`:
 
-    python -m finetune_train --sampling_alpha 1 --sampling_beta 1 --cudnn_benchmark --cb_inference_freq 5 --num_inference_complexes 100 --use_ema --n_epochs 10 --inference_samples 8 --moad_esm_embeddings_sequences_path TODO --moad_esm_embeddings_path TODO --moad_dir TODO --confidence_cutoff -4 --pretrain_ckpt best_ema_inference_epoch_model --pretrain_dir workdir/pretrained_score --filtering_ckpt best_model.pt --filtering_model_dir workdir/pretrained_confidence --max_complexes_per_couple 20 --cb_cluster "Molybdenum cofactor biosynthesis proteins" --fixed_length 100 --initial_iterations 5 --minimum_t 0 --cache_path cache --inference_batch_size 4 --save_model_freq 25 --split test --inference_iterations 4 --buffer_sampling_alpha 2 --buffer_sampling_beta 1
+    python -m finetune_train --sampling_alpha 1 --sampling_beta 1 --cudnn_benchmark --cb_inference_freq 5 --num_inference_complexes 100 --use_ema --n_epochs 10 --inference_samples 8 --moad_esm_embeddings_sequences_path data/sequences_to_id.fasta --moad_esm_embeddings_path data/BindingMOAD_2020_processed/moad_sequences_new.pt --moad_dir data/BindingMOAD_2020_processed --confidence_cutoff -4 --pretrain_ckpt best_ema_inference_epoch_model --pretrain_dir workdir/pretrained_score --filtering_ckpt best_model.pt --filtering_model_dir workdir/pretrained_confidence --max_complexes_per_couple 20 --cb_cluster "Homo-oligomeric flavin-containing Cys decarboxylases, HFCD" --fixed_length 100 --initial_iterations 5 --minimum_t 0 --cache_path cache --inference_batch_size 4 --save_model_freq 25 --split test --inference_iterations 4 --buffer_sampling_alpha 2 --buffer_sampling_beta 1
 
 
 Note that the command above is not the same as the one used in experiments in the paper, which also samples random complexes from PDBBind at every bootstrapping step. To reproduce paper results, we need to download the PDBBind dataset:

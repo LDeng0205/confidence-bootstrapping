@@ -125,6 +125,7 @@ local_config_inference2.yml
 /data/*
 !/data/splits
 !/data/protein_ligand_example_csv.csv
+!/data/sequences_to_id.fasta
 !/data/testset_csv.csv
 !/data/INDEX_general_PL_data.2020
 test_run
