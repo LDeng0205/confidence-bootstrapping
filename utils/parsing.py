@@ -13,7 +13,7 @@ def parse_train_args():
     parser.add_argument('--pretrain_ckpt', type=str, help='')
     parser.add_argument('--freeze_params', type=int, default=0, help='')
     parser.add_argument('--cache_path', type=str, default='data/cacheMOAD', help='Folder from where to load/restore cached dataset')
-    parser.add_argument('--moad_dir', type=str, default='data/BindingMOAD_2020_ab_processed_biounit/', help='Folder containing original structures')
+    parser.add_argument('--moad_dir', type=str, default='data/BindingMOAD_2020_processed/', help='Folder containing original structures')
     parser.add_argument('--pdbbind_dir', type=str, default='data/PDBBind_processed/', help='Folder containing original structures')
     parser.add_argument('--dataset', type=str, default='pdbbind', help='Folder containing original structures')
     parser.add_argument('--split_train', type=str, default='data/splits/timesplit_no_lig_overlap_train', help='Path of file defining the split')

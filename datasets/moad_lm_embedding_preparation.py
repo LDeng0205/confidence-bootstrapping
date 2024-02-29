@@ -8,9 +8,9 @@ from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
 
 parser = ArgumentParser()
-parser.add_argument('--data_dir', type=str, default='../data/BindingMOAD_2020_ab_processed_biounit/pdb_protein/', help='')
-parser.add_argument('--out_file', type=str, default="../data/BindingMOAD_2020_ab_processed_biounit/moad_sequences_new.fasta")
-parser.add_argument('--out_dict', type=str, default="../data/BindingMOAD_2020_ab_processed_biounit/sequences_to_id.fasta")
+parser.add_argument('--data_dir', type=str, default='../data/BindingMOAD_2020_processed/pdb_protein/', help='')
+parser.add_argument('--out_file', type=str, default="../data/BindingMOAD_2020_processed/moad_sequences_new.fasta")
+parser.add_argument('--out_dict', type=str, default="../data/BindingMOAD_2020_processed/sequences_to_id.fasta")
 args = parser.parse_args()
 
 data_dir = args.data_dir

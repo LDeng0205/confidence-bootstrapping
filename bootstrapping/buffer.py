@@ -19,7 +19,7 @@ class CBBuffer(Dataset):
         self.buffer_decay = buffer_decay
         self.reset_buffer = reset_buffer
 
-        with open("data/BindingMOAD_2020_ab_processed_biounit/new_cluster_to_ligands.pkl", "rb") as f:
+        with open("data/BindingMOAD_2020_processed/new_cluster_to_ligands.pkl", "rb") as f:
             self.cluster_to_ligands = pickle.load(f)
 
         assert cluster_name is not None
