@@ -16,7 +16,7 @@ args = parser.parse_args()
 data_dir = args.data_dir
 names = os.listdir(data_dir)
 names = [n[:6] for n in names]
-#%%
+
 from Bio import SeqIO
 biopython_parser = PDBParser()
 
