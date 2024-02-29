@@ -40,6 +40,11 @@ Then we convert the embeddings to a single `.pt` file:
 
     python datasets/esm_embeddings_to_pt.py --esm_embeddings_path data/esm2_output    
 
+
+## Pretrained models
+
+We provide pretrained diffusion and confidence models at `workdir/pretrained_score` and `workdir/pretrained_confidence` respectively. In addition, we have provided eight finetuned models reported in the paper also in `workdir`, with the names of the folders as the prefix of the cluster names.
+
 ## Running finetuning:
 
 Finally, we can run the Confidence Bootstrapping finetuning on a cluster like `Homo-oligomeric flavin-containing Cys decarboxylases, HFCD`:
