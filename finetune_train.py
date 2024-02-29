@@ -69,7 +69,7 @@ def get_filtering_dataset(args, model_args):
                     knn_only_graph=True if not hasattr(args, 'not_knn_only_graph') else not args.not_knn_only_graph,
                     include_miscellaneous_atoms=False if not hasattr(args, 'include_miscellaneous_atoms') else args.include_miscellaneous_atoms,
                     num_conformers=1,
-                    unroll_clusters=args.unroll_clusters,
+                    unroll_clusters=True,
                     min_ligand_size=args.min_ligand_size,
                     max_receptor_size=args.max_receptor_size,
                     remove_promiscuous_targets=args.remove_promiscuous_targets)
@@ -111,7 +111,7 @@ def construct_datasets(args, t_to_sigma):
                           keep_original=True, multiplicity=args.target_multiplicity, max_receptor_size=args.max_receptor_size,
                           remove_promiscuous_targets=args.remove_promiscuous_targets, min_ligand_size=args.min_ligand_size,
                           esm_embeddings_sequences_path=args.moad_esm_embeddings_sequences_path,
-                          unroll_clusters=args.unroll_clusters, root=args.moad_dir, transform=transform,
+                          unroll_clusters=True, root=args.moad_dir, transform=transform,
                           esm_embeddings_path=args.moad_esm_embeddings_path, require_ligand=True, **common_args)
 
     if args.keep_original_train:
@@ -121,7 +121,7 @@ def construct_datasets(args, t_to_sigma):
                               remove_promiscuous_targets=args.remove_promiscuous_targets,
                               min_ligand_size=args.min_ligand_size,
                               esm_embeddings_sequences_path=args.moad_esm_embeddings_sequences_path,
-                              unroll_clusters=args.unroll_clusters, root=args.moad_dir,
+                              unroll_clusters=True, root=args.moad_dir,
                               esm_embeddings_path=args.moad_esm_embeddings_path, require_ligand=True,
                              total_dataset_size=args.total_trainset_size, **common_args)
         finetune_dataset = CombineDatasets(finetune_dataset, train_dataset)
