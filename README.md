@@ -1,7 +1,7 @@
 # DEEP CONFIDENT STEPS TO NEW POCKETS: STRATEGIES FOR DOCKING GENERALIZATION
 
 
-Here we provide our implementation of the Confidence Bootstrapping method, pretrained diffusion and confidence models, and processed receptors from the DockGen validation and test sets. 
+Here we provide our implementation of the Confidence Bootstrapping method (https://arxiv.org/abs/2402.18396), pretrained diffusion and confidence models, and processed receptors from the DockGen validation and test sets. 
 
 ## Dataset
 
